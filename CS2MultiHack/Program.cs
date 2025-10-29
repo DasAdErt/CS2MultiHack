@@ -1,4 +1,4 @@
-﻿using SharpDX;
+using SharpDX;
 using SharpDX.DirectInput;
 using SharpDX.Mathematics.Interop;
 using Swed64;
@@ -53,18 +53,16 @@ namespace CS2MultiHack
         const int MOUSE5 = 0x06; //	X2 mouse button
 
         private const int MOUSEEVENTF_LEFTDOWN = 0x0002;
-        private const int MOUSEEVENTF_LEFTUP = 0x0004;
-
-        public const int KEYEVENTF_EXTENDEDKEY = 0x0001;
+         public const int KEYEVENTF_EXTENDEDKEY = 0x0001;
         public const int KEYEVENTF_KEYUP = 0x0002;
         public const uint VK_SPACE = 0x20; // Виртуальный код клавиши Space
 
-        static float originalFov = 0.0f;
-        static bool wasScoped = false;
+        private float originalFov = 0.0f;
+        private bool wasScoped = false;
 
-        private Thread triggerBotThread;
-        private bool triggerBotRunning = false;
-        private ManualResetEvent stopTriggerBot = new ManualResetEvent(false);
+        private Thread? triggerBotThread;
+        private volatile bool triggerBotRunning = false;
+        private ManualResetEvent stopTriggerBot = new ManualResetEvent(false);opTriggerBot = new ManualResetEvent(false);setEvent(false);
 
         private Vector2 oldPunch = Vector2.Zero;
 
@@ -101,26 +99,13 @@ namespace CS2MultiHack
             IntPtr forceAttackAddress = client_dll + Offsets.attack;
 
             bool isAiming = false;
-            bool isFirstShotWaiting = false;
-            DateTime firstShotTime = DateTime.MinValue;
-
-            const uint STANDING = 65665;
+                      const uint STANDING = 65665;
             const uint CROUCHING = 65667;
-            const uint IN_AIR = 65664;
-            const uint IN_AIR_CTRL = 65666;
-
-            const uint PLUS_JUMP = 65537; //+jump
-            const uint MINUS_JUMP = 16777472; //-jump
-
-            const int PLUS_ATTACK = 65537; //+attack
-            const int MINUS_ATTACK = 16777472; //-attack
-
-            //IntPtr handle = GetConsoleWindow();
-            //ShowWindow(handle, SW_HIDE);
 
             Menu menu = new Menu();
 
-            Thread menuThread = new Thread(new ThreadStart(menu.Start().Wait));
+            Thread menuThread = new Thread(() => menu.Start().Wait());
+            menuThread.Start();rt(menu.Start().Wait));
             menuThread.Start();
 
             Vector2 screenSize = menu.screenSize;
@@ -136,13 +121,7 @@ namespace CS2MultiHack
                 localPlayer.team = swed.ReadInt(localPlayerPawn, Offsets.m_iTeamNum);
                 localPlayer.pawnAddress = localPlayerPawn;
                 localPlayer.position = swed.ReadVec(localPlayerPawn, Offsets.m_vOldOrigin);
-                localPlayer.viewOffset = swed.ReadVec(localPlayerPawn, Offsets.m_vecViewOffset);
-
-                for (int i = 0; i < 64; i++)
-                {
-                    if (listEntryNew == IntPtr.Zero) continue;
-
-                    IntPtr currentController = swed.ReadPointer(listEntryNew, i * 0x78);
+                localPlayer.viewOff                    IntPtr currentController = swed.ReadPointer(listEntryNew, i * 0x78);
                     if (currentController == IntPtr.Zero) continue;
 
                     int pawnHandle = swed.ReadInt(currentController, Offsets.m_hPlayerPawn);
@@ -152,29 +131,30 @@ namespace CS2MultiHack
                     if (listEntry2 == IntPtr.Zero) continue;
 
                     IntPtr currentPawn = swed.ReadPointer(listEntry2, 0x78 * (pawnHandle & 0x1FF));
-                    if (currentPawn == localPlayer.pawnAddress) continue;
+                    if (currentPawn == IntPtr.Zero || currentPawn == localPlayer.pawnAddress) continue;
 
                     IntPtr currentWeapon = swed.ReadPointer(currentPawn, Offsets.m_pClippingWeapon);
-                    if (currentPawn == IntPtr.Zero) continue;
+                    if (currentWeapon == IntPtr.Zero) continue;
 
                     short weaponDefinitionIndex = swed.ReadShort(currentWeapon, Offsets.m_AttributeManager + Offsets.m_Item + Offsets.m_iItemDefinitionIndex);
                     if (weaponDefinitionIndex == -1) continue;
 
-                    uint lifeState = swed.ReadUInt(currentPawn, Offsets.m_lifeState);
-                    if (lifeState != 256) continue;
-
-                    int teamNum = swed.ReadInt(currentPawn, Offsets.m_iTeamNum);
+                    uint lifeSt                    int teamNum = swed.ReadInt(currentPawn, Offsets.m_iTeamNum);
                     if (teamNum == localPlayer.team && !menu.aimOnTeam) continue;
 
                     float[] viewMatrix = swed.ReadMatrix(client_dll + Offsets.dwViewMatrix);
 
                     IntPtr sceneNode = swed.ReadPointer(currentPawn, Offsets.m_pGameSceneNode);
-                    IntPtr boneMatrix = swed.ReadPointer(sceneNode, Offsets.m_modelState + 0x80); //0x80 dwBoneMatrix
+                    if (sceneNode == IntPtr.Zero) continue;
+                    
+                    IntPtr boneMatrix = swed.ReadPointer(sceneNode, Offsets.m_modelState + 0x80);
+                    if (boneMatrix == IntPtr.Zero) continue;
 
                     IntPtr currentWeaponLocal = swed.ReadPointer(localPlayerPawn, Offsets.m_pClippingWeapon);
-                    if (currentPawn == IntPtr.Zero) continue;
+                    if (currentWeaponLocal == IntPtr.Zero) continue;
 
                     short weaponDefinitionIndexLocal = swed.ReadShort(currentWeaponLocal, Offsets.m_AttributeManager + Offsets.m_Item + Offsets.m_iItemDefinitionIndex);
+                    if (weaponDefinitionIndexLocal == -1) continue;sets.m_Item + Offsets.m_iItemDefinitionIndex);
                     if (weaponDefinitionIndex == -1) continue;
 
                     localPlayer.currentWeaponIndex = weaponDefinitionIndexLocal;
@@ -231,9 +211,7 @@ namespace CS2MultiHack
                 {
                     if (menu.aimbot)
                     {
-                        //entities = entities.OrderBy(o => o.distance).ToList(); // ближе к тебе , но с фовом 100.000.000.000.000
-                        //entities = entities.OrderBy(o => o.pixelDistance).ToList();
-                        entities = entities
+                        //entities = entities.Order                        entities = entities
                                     .Where(o => o.pixelDistance != null && !o.pixelDistance.Any(float.IsNaN))
                                     .OrderBy(o => o.pixelDistance.Min())
                                     .ToList();
@@ -247,23 +225,30 @@ namespace CS2MultiHack
 
                                 if (localPlayer.scopped)
                                 {
-                                    if (!wasScoped)
+                                    if (!program.wasScoped)
                                     {
-                                        originalFov = menu.fov;
-                                        menu.fov = originalFov * 2;
-                                        wasScoped = true;
+                                        program.originalFov = menu.fov;
+                                        menu.fov = program.originalFov * 2;
+                                        program.wasScoped = true;
                                     }
                                 }
                                 else
                                 {
-                                    if (wasScoped)
+                                    if (program.wasScoped)
                                     {
-                                        menu.fov = originalFov;
+                                        menu.fov = program.originalFov;
+                                        program.wasScoped = false;
+                                    }
+                                }                       menu.fov = originalFov;
                                         wasScoped = false;
                                     }
                                 }
 
-                                if (menu.aimOnlyVisible && !entities[0].spotted) continue;
+                                if (menu.aimOnlyVisible && !entities[0].spotted) 
+                                {
+                                    Thread.Sleep(3);
+                                    continue;
+                                }
 
                                 /*if (entities[0].pixelDistance[0] < menu.fov || entities[0].pixelDistance[1] < menu.fov || entities[0].pixelDistance[2] < menu.fov || entities[0].pixelDistance[3] < menu.fov || entities[0].pixelDistance[4] < menu.fov || entities[0].pixelDistance[5] < menu.fov || entities[0].pixelDistance[6] < menu.fov)
                                 {
@@ -414,16 +399,7 @@ namespace CS2MultiHack
                     {
                         if (GetAsyncKeyState(MOUSE4) < 0)
                         {
-                            if (fFlag == STANDING || fFlag == CROUCHING)
-                            {
-                                keybd_event((byte)VK_SPACE, 0, 0, 0);
-                                Thread.Sleep(5);
-                                keybd_event((byte)VK_SPACE, 0, KEYEVENTF_KEYUP, 0);
-                            }
-                        }
-                    }
-
-                    IntPtr OverlayHwnd = FindWindow(null, "overlay");
+                            if (fFlag == STANDING || fFlag == CR                    IntPtr OverlayHwnd = FindWindow(null, "overlay");
 
                     if (menu.obsBypass)
                         SetWindowDisplayAffinity(OverlayHwnd, (uint)WDA.WDA_EXCLUDEFROMCAPTURE); //Bypass on
@@ -432,17 +408,20 @@ namespace CS2MultiHack
 
                     Thread.Sleep(3);
                 }
-                //Thread.Sleep(1); //без этого пизда ребята
             }
         }
 
         public void StartTriggerBot(Swed swed, int entIndex, int team, IntPtr entityList, Menu menu)
         {
-            Program program = new Program();
-            if (triggerBotRunning) return;
-
-            triggerBotRunning = true;
-            stopTriggerBot.Reset();
+            if (triggerBotRunning) return;                   triggerBotThread = new Thread(() => {
+                while (triggerBotRunning && !stopTriggerBot.WaitOne(1))
+                {
+                    if (menu.triggerbot)
+                    {
+                        TriggerBot(swed, team, entityList, menu);
+                    }
+                }
+            });et();
 
             triggerBotThread = new Thread(() => {
                 while (triggerBotRunning && !stopTriggerBot.WaitOne(1))
