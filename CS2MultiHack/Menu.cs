@@ -1,4 +1,4 @@
-﻿using ClickableTransparentOverlay;
+using ClickableTransparentOverlay;
 using ImGuiNET;
 using Swed64;
 using System.Collections.Concurrent;
@@ -72,19 +72,17 @@ namespace CS2MultiHack
         public bool spectatorList = false;
         public bool obsBypass = true;
 
-        public float sensitivity = 1.75f; // Чувствительность мыши из игры
-
-        public bool showWindow = true;
+          public bool showWindow = true;
         public bool focusedWindow;
-
-        public Vector2 screenSize = new Vector2(1920, 1080);
 
         private ConcurrentQueue<Entity> entities = new ConcurrentQueue<Entity>();
         private Entity localPlayer = new Entity();
+        private readonly object localPlayerLock = new object();er = new Entity();
         private readonly object entityLock = new object();
 
         ImDrawListPtr drawList;
-        public List<string> spectators = new List<string>();
+        private readonly List<string> spectators = new List<string>();
+        private readonly object spectatorsLock = new object();
 
         [DllImport("user32.dll")]
         static extern short GetAsyncKeyState(int vKey);
@@ -444,22 +442,19 @@ namespace CS2MultiHack
                 DrawWatermark();
 
             if (drawFov && enableAimbot && aimbot)
-                drawList.AddCircle(new Vector2(screenSize.X / 2, screenSize.Y / 2), fov, ImGui.ColorConvertFloat4ToU32(fovAimbotColor));
-
-            foreach (var entity in entities)
-            {
-                if (EntityOnScreen(entity))
-                {
-                    if (healthBar == true && enableVisuals == true && entity.health > 0)
-                        DrawHealthBar(entity);
-                    if (skeletonESP == true && enableVisuals == true && entity.health > 0)
-                        DrawBones(entity);
-                    if (box == true && enableVisuals == true && entity.health > 0)
+                drawList.AddCircle(new Vector2(screenSize.X / 2, screenSize.Y / 2), fov, Im                    if (box == true && enableVisuals == true && entity.health > 0)
                         DrawBox(entity);
                     if (snapLines == true && enableVisuals == true && entity.health > 0)
                         DrawLines(entity);
-                    if (name == true && enableVisuals == true && entity.health > 0)
-                        DrawName(entity, 20, 20);
+                    if (name == true && enableVisuals == true && entity.health > 0)                    DrawBones(entity);
+                    if (box == true && enableVisuals == true && entity.health > 0)
+                        DrawBox(entity);        public void UpdateSpectatorList(Swed swed, IntPtr client_dll, IntPtr enti        public void UpdateSpectatorList(Swed swed, IntPtr client_dll, IntPtr entityList, IntPtr localPlayerPawn)
+        {
+            // Очистить текущий список наблюдателей
+            lock (spectatorsLock)
+            {
+                spectators.Clear();
+            }                        DrawName(entity, 20, 20);
                     if (weaponName == true && enableVisuals == true && entity.health > 0)
                         DrawWeaponName(entity, 20);
                 }
@@ -515,43 +510,21 @@ namespace CS2MultiHack
                     if (observerServices == IntPtr.Zero) continue;
 
                     // Получаем цель, за которой наблюдает игрок
-                    int observerTargetHandle = swed.ReadInt(observerServices, Offsets.m_hObserverTarget);
-                    if (observerTargetHandle == 0) continue;
-
-                    IntPtr listEntry4 = swed.ReadPointer(entityList, 0x8 * ((observerTargetHandle & 0x7FFF) >> 9) + 0x10);
-                    if (listEntry4 == IntPtr.Zero) continue;
-
-                    IntPtr observerTargetPawn = swed.ReadPointer(listEntry4, 0x78 * (observerTargetHandle & 0x1FF));
-                    if (observerTargetPawn == IntPtr.Zero) continue;
-
-                    // Если цель наблюдения - локальный игрок, добавляем наблюдателя в список
+                    int observerTargetHandle                    // Если цель наблюдения - локальный игрок, добавляем наблюдателя в список
                     if (observerTargetPawn == localPlayerPawn)
                     {
-                        string spectatorName = swed.ReadString(currentController, Offsets.m_iszPlayerName, 16).Split('\0')[0];
-                        if (!string.IsNullOrEmpty(spectatorName) && !spectators.Contains(spectatorName))
+                        string spectatorName = swed.ReadString(currentController, Offsets.m_iszPlayerName, 16).Split('\\0')[0];
+                        if (!string.IsNullOrEmpty(spectatorName))
                         {
-                            spectators.Add(spectatorName);
+                            lock (spectatorsLock)
+                            {
+                                if (!spectators.Contains(spectatorName))
+                                {
+                                    spectators.Add(spectatorName);
+                                }
+                            }
                         }
-                    }
-                }
-                catch (Exception)
-                {
-                    // Просто пропускаем ошибки для стабильности
-                    continue;
-                }
-            }
-        }
-
-        private void DrawSpectatorList()
-        {
-            if (spectators.Count == 0) return;
-
-            List<string> spectatorsCopy;
-            lock (spectators)
-            {
-                try
-                {
-                    spectatorsCopy = new List<string>(spectators.ToArray());
+                    }List<string>(spectators.ToArray());
                 }
                 catch (ArgumentException ex)
                 {
@@ -673,17 +646,14 @@ namespace CS2MultiHack
             // Флаги окна
             ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration
                                    | ImGuiWindowFlags.AlwaysAutoResize
-                                   | ImGuiWindowFlags.NoFocusOnAppearing
-                                   | ImGuiWindowFlags.NoNav
-                                   | ImGuiWindowFlags.NoMove;
-
-            if (ImGui.Begin("##Watermark", flags))
+                                   | ImGuiWind        bool Entity        bool EntityOnScreen(Entity entity)
+        {
+            if (entity.position2D.X > 0 && entity.position2D.X < screenSize.X && entity.position2D.Y > 0 && entity.position2D.Y < screenSize.Y)
             {
-                ImGui.PushStyleColor(ImGuiCol.Text, TextColor);
-
-                // Формируем текст водяного знака
-                int fps = (int)io.Framerate;
-                string watermarkText = $"ImGui .NET Multi Hack | FPS overlay: {fps}";
+                return true;
+            }
+            return false;
+        } string watermarkText = $"ImGui .NET Multi Hack | FPS overlay: {fps}";
 
                 ImGui.TextUnformatted(watermarkText);
                 ImGui.PopStyleColor();
@@ -913,10 +883,22 @@ namespace CS2MultiHack
                 drawList.AddLine(entity.bones2D[3], entity.bones2D[4], uintColor, currentBoneThickness);
                 drawList.AddLine(entity.bones2D[6], entity.bones2D[7], uintColor, currentBoneThickness);
                 drawList.AddLine(entity.bones2D[4], entity.bones2D[5], uintColor, currentBoneThickness);
-                drawList.AddLine(entity.bones2D[7], entity.bones2D[8], uintColor, currentBoneThickness);
-                drawList.AddLine(entity.bones2D[1], entity.bones2D[0], uintColor, currentBoneThickness);
-                drawList.AddLine(entity.bones2D[0], entity.bones2D[9], uintColor, currentBoneThickness);
-                drawList.AddLine(entity.bones2D[0], entity.bones2D[11], uintColor, currentBoneThickness);
+              public void UpdateLocalPlayer(Entity newEntity)
+                public void UpdateLocalPlayer(Entity newEntity)
+        {
+            lock (localPlayerLock)
+            {
+                localPlayer = newEntity;
+            }
+        }
+
+        public Entity GetLocalPlayer()
+        {
+            lock (localPlayerLock)
+            {
+                return localPlayer;
+            }
+        }, uintColor, currentBoneThickness);
                 drawList.AddLine(entity.bones2D[9], entity.bones2D[10], uintColor, currentBoneThickness);
                 drawList.AddLine(entity.bones2D[11], entity.bones2D[12], uintColor, currentBoneThickness);
                 drawList.AddCircle(entity.bones2D[2], 3 + currentBoneThickness, uintColor);
